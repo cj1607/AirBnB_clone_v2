@@ -1,29 +1,26 @@
 #!/usr/bin/python3
-import os
-from fabric.api import *
+""" Deletes out-of-date archives """
+from os import listdir
+from fabric.api import sudo, local, cd, lcd, env, run
 
-env.hosts = ['100.25.19.204', '54.157.159.85']
+env.hosts = ['34.139.119.72', '34.139.135.201']
 
 
 def do_clean(number=0):
-    """Delete out-of-date archives.
+    """ Deletes out-of-date archives locally and on my remote hosts """
 
-    Args:
-        number (int): The number of archives to keep.
+    if int(number) == 0:
+        number = 1
+    else:
+        number = int(number)
 
-    If number is 0 or 1, keeps only the most recent archive. If
-    number is 2, keeps the most and second-most recent archives,
-    etc.
-    """
-    number = 1 if int(number) == 0 else int(number)
-
-    archives = sorted(os.listdir("versions"))
-    [archives.pop() for i in range(number)]
+    old_new = sorted(listdir("versions"))
+    [old_new.pop() for i in range(number)]
     with lcd("versions"):
-        [local("rm ./{}".format(a)) for a in archives]
+            [local("rm ./{}".format(arch)) for arch in old_new]
 
     with cd("/data/web_static/releases"):
         archives = run("ls -tr").split()
         archives = [a for a in archives if "web_static_" in a]
         [archives.pop() for i in range(number)]
-        [run("rm -rf ./{}".format(a)) for a in archives]
+        [sudo("rm -rf ./{}".format(a)) for a in archives]

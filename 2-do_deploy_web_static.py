@@ -1,56 +1,32 @@
 #!/usr/bin/python3
-"""Compress web static package
 """
-from fabric.api import *
-from datetime import datetime
-from os import path
+Distributes an archive to web servers
+"""
+
+from fabric.api import run, put, env, sudo
+from os.path import isfile
 
 
-env.hosts = ['100.25.19.204', '54.157.159.85']
-env.user = 'ubuntu'
-env.key_filename = '~/.ssh/id_rsa'
+env.hosts = ['34.139.119.72', '34.139.135.201']
 
 
 def do_deploy(archive_path):
-        """Deploy web files to server
-        """
-        try:
-                if not (path.exists(archive_path)):
-                        return False
+    """ Distributes an archive to web servers """
+    if not isfile(archive_path):
+        return False
+    try:
+        localpath = archive_path.split('/')[1]
+        newpath = localpath.split('.')[0]
+        rempath = "/data/web_static/releases/"
 
-                # upload archive
-                put(archive_path, '/tmp/')
-
-                # create target dir
-                timestamp = archive_path[-18:-4]
-                run('sudo mkdir -p /data/web_static/\
-releases/web_static_{}/'.format(timestamp))
-
-                # uncompress archive and delete .tgz
-                run('sudo tar -xzf /tmp/web_static_{}.tgz -C \
-/data/web_static/releases/web_static_{}/'
-                    .format(timestamp, timestamp))
-
-                # remove archive
-                run('sudo rm /tmp/web_static_{}.tgz'.format(timestamp))
-
-                # move contents into host web_static
-                run('sudo mv /data/web_static/releases/web_static_{}/web_static/* \
-/data/web_static/releases/web_static_{}/'.format(timestamp, timestamp))
-
-                # remove extraneous web_static dir
-                run('sudo rm -rf /data/web_static/releases/\
-web_static_{}/web_static'
-                    .format(timestamp))
-
-                # delete pre-existing sym link
-                run('sudo rm -rf /data/web_static/current')
-
-                # re-establish symbolic link
-                run('sudo ln -s /data/web_static/releases/\
-web_static_{}/ /data/web_static/current'.format(timestamp))
-        except:
-                return False
-
-        # return True on success
+        put(archive_path, "/tmp/".format(localpath))
+        sudo("mkdir -p {}{}".format(rempath, newpath))
+        sudo("tar -xzf /tmp/{} -C {}{}".format(localpath, rempath, newpath))
+        sudo("rm /tmp/{}".format(localpath))
+        sudo("cp -r {0}{1}/web_static/* {0}{1}/".format(rempath, newpath))
+        sudo("rm -rf {}{}/web_static".format(rempath, newpath))
+        sudo("rm -rf /data/web_static/current")
+        sudo("ln -s {}{}/ /data/web_static/current".format(rempath, newpath))
         return True
+    except:
+        return False

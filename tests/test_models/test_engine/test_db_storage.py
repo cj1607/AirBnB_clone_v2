@@ -1,175 +1,175 @@
 #!/usr/bin/python3
-''' module for file_storage tests '''
+"""
+Unittest for the DBStorage class
+"""
+
 import unittest
-import MySQLdb
-from models.user import User
-from models import storage
-from datetime import datetime
 import os
+import MySQLdb
+from io import StringIO
+from unittest.mock import patch
+from models.base_model import BaseModel
+from models.city import City
+from models.place import Place
+from models.review import Review
+from models.state import State
+from models.user import User
+from models.amenity import Amenity
+from models import storage
+from console import HBNBCommand
 
-@unittest.skipIf(os.getenv('HBNB_TYPE_STORAGE') != 'db',
-                 'db_storage test not supported')
-class TestDBStorage(unittest.TestCase):
-    '''testing dbstorage engine'''
-    def test_new_and_save(self):
-        '''testing  the new and save methods'''
-        db = MySQLdb.connect(user=os.getenv('HBNB_MYSQL_USER'),
-                             host=os.getenv('HBNB_MYSQL_HOST'),
-                             passwd=os.getenv('HBNB_MYSQL_PWD'),
-                             port=3306,
-                             db=os.getenv('HBNB_MYSQL_DB'))
-        new_user = User(**{'first_name': 'jack',
-                           'last_name': 'bond',
-                           'email': 'jack@bond.com',
-                           'password': 12345})
-        cur = db.cursor()
-        cur.execute('SELECT COUNT(*) FROM users')
-        old_count = cur.fetchall()
-        cur.close()
-        db.close()
-        new_user.save()
-        db = MySQLdb.connect(user=os.getenv('HBNB_MYSQL_USER'),
-                             host=os.getenv('HBNB_MYSQL_HOST'),
-                             passwd=os.getenv('HBNB_MYSQL_PWD'),
-                             port=3306,
-                             db=os.getenv('HBNB_MYSQL_DB'))
-        cur = db.cursor()
-        cur.execute('SELECT COUNT(*) FROM users')
-        new_count = cur.fetchall()
-        self.assertEqual(new_count[0][0], old_count[0][0] + 1)
-        cur.close()
-        db.close()
 
-    def test_new(self):
-        """ New object is correctly added to database """
-        new = User(
-            email='john2020@gmail.com',
-            password='password',
-            first_name='John',
-            last_name='Zoldyck'
-        )
-        self.assertFalse(new in storage.all().values())
-        new.save()
-        self.assertTrue(new in storage.all().values())
-        dbc = MySQLdb.connect(
-            host=os.getenv('HBNB_MYSQL_HOST'),
-            port=3306,
-            user=os.getenv('HBNB_MYSQL_USER'),
-            passwd=os.getenv('HBNB_MYSQL_PWD'),
-            db=os.getenv('HBNB_MYSQL_DB')
-        )
-        cursor = dbc.cursor()
-        cursor.execute('SELECT * FROM users WHERE id="{}"'.format(new.id))
-        result = cursor.fetchone()
-        self.assertTrue(result is not None)
-        self.assertIn('john2020@gmail.com', result)
-        self.assertIn('password', result)
-        self.assertIn('John', result)
-        self.assertIn('Zoldyck', result)
-        cursor.close()
-        dbc.close()
+classes = {"Amenity": Amenity, "City": City,
+           "Place": Place, "Review": Review, "State": State, "User": User}
+if os.getenv("HBNB_TYPE_STORAGE") == 'db':
+    my_db = MySQLdb.connect(host=os.getenv("HBNB_MYSQL_HOST"),
+                            port=3306,
+                            user=os.getenv("HBNB_MYSQL_USER"),
+                            password=os.getenv("HBNB_MYSQL_PWD"),
+                            db=os.getenv("HBNB_MYSQL_DB"))
+    cursor = my_db.cursor()
+
+
+@unittest.skipIf(os.getenv("HBNB_TYPE_STORAGE") != 'db', "Testing db storage")
+class test_DBStorage(unittest.TestCase):
+    """ Class to test the Database storage methods """
 
     def test_delete(self):
-        """ Object is correctly deleted from database """
-        new = User(
-            email='john2020@gmail.com',
-            password='password',
-            first_name='John',
-            last_name='Zoldyck'
-        )
-        obj_key = 'User.{}'.format(new.id)
-        dbc = MySQLdb.connect(
-            host=os.getenv('HBNB_MYSQL_HOST'),
-            port=3306,
-            user=os.getenv('HBNB_MYSQL_USER'),
-            passwd=os.getenv('HBNB_MYSQL_PWD'),
-            db=os.getenv('HBNB_MYSQL_DB')
-        )
-        new.save()
-        self.assertTrue(new in storage.all().values())
-        cursor = dbc.cursor()
-        cursor.execute('SELECT * FROM users WHERE id="{}"'.format(new.id))
-        result = cursor.fetchone()
-        self.assertTrue(result is not None)
-        self.assertIn('john2020@gmail.com', result)
-        self.assertIn('password', result)
-        self.assertIn('John', result)
-        self.assertIn('Zoldyck', result)
-        self.assertIn(obj_key, storage.all(User).keys())
-        new.delete()
-        self.assertNotIn(obj_key, storage.all(User).keys())
-        cursor.close()
-        dbc.close()
-
-    def test_reload(self):
-        """ Tests the reloading of the database session """
-        dbc = MySQLdb.connect(
-            host=os.getenv('HBNB_MYSQL_HOST'),
-            port=3306,
-            user=os.getenv('HBNB_MYSQL_USER'),
-            passwd=os.getenv('HBNB_MYSQL_PWD'),
-            db=os.getenv('HBNB_MYSQL_DB')
-        )
-        cursor = dbc.cursor()
-        cursor.execute(
-            'INSERT INTO users(id, created_at, updated_at, email, password' +
-            ', first_name, last_name) VALUES(%s, %s, %s, %s, %s, %s, %s);',
-            [
-                '4447-by-me',
-                str(datetime.now()),
-                str(datetime.now()),
-                'ben_pike@yahoo.com',
-                'pass',
-                'Benjamin',
-                'Pike',
-            ]
-        )
-        self.assertNotIn('User.4447-by-me', storage.all())
-        dbc.commit()
-        storage.reload()
-        self.assertIn('User.4447-by-me', storage.all())
-        cursor.close()
-        dbc.close()
+        """Test that deleting an instance deletes the entry in the database"""
+        SQL = "SELECT COUNT(name) FROM states"
+        state = State(name="Georgia")
+        state.save()
+        cursor.execute(SQL)
+        count = int(cursor.fetchone()[0])
+        my_db.commit()
+        state.delete()
+        storage.save()
+        cursor.execute(SQL)
+        new_count = int(cursor.fetchone()[0])
+        self.assertEqual(count - 1, new_count)
 
     def test_save(self):
-        """ object is successfully saved to database """
-        new = User(
-            email='john2020@gmail.com',
-            password='password',
-            first_name='John',
-            last_name='Zoldyck'
-        )
-        dbc = MySQLdb.connect(
-            host=os.getenv('HBNB_MYSQL_HOST'),
-            port=3306,
-            user=os.getenv('HBNB_MYSQL_USER'),
-            passwd=os.getenv('HBNB_MYSQL_PWD'),
-            db=os.getenv('HBNB_MYSQL_DB')
-        )
-        cursor = dbc.cursor()
-        cursor.execute('SELECT * FROM users WHERE id="{}"'.format(new.id))
-        result = cursor.fetchone()
-        cursor.execute('SELECT COUNT(*) FROM users;')
-        old_cnt = cursor.fetchone()[0]
-        self.assertTrue(result is None)
-        self.assertFalse(new in storage.all().values())
-        new.save()
-        dbc1 = MySQLdb.connect(
-            host=os.getenv('HBNB_MYSQL_HOST'),
-            port=3306,
-            user=os.getenv('HBNB_MYSQL_USER'),
-            passwd=os.getenv('HBNB_MYSQL_PWD'),
-            db=os.getenv('HBNB_MYSQL_DB')
-        )
-        cursor1 = dbc1.cursor()
-        cursor1.execute('SELECT * FROM users WHERE id="{}"'.format(new.id))
-        result = cursor1.fetchone()
-        cursor1.execute('SELECT COUNT(*) FROM users;')
-        new_cnt = cursor1.fetchone()[0]
-        self.assertFalse(result is None)
-        self.assertEqual(old_cnt + 1, new_cnt)
-        self.assertTrue(new in storage.all().values())
-        cursor1.close()
-        dbc1.close()
-        cursor.close()
-        dbc.close()
+        """Test that creating a new objects creates an entry in the database"""
+        SQL = "SELECT COUNT(name) FROM states"
+        cursor.execute(SQL)
+        count = int(cursor.fetchone()[0])
+        my_db.commit()
+        state = State(name="Kansas")
+        state.save()
+        cursor.execute(SQL)
+        new_count = int(cursor.fetchone()[0])
+        self.assertEqual(count + 1, new_count)
+
+    def test_all(self):
+        """Test that the all method returns all instances"""
+        state = State(name="New York")
+        state.save()
+        amenity = Amenity(name="Garden")
+        amenity.save()
+        user = User(email="jj@menow.com", password="jjpwd")
+        user.save()
+        my_state = storage.all("State")
+        self.assertIn(state, my_state.values())
+        my_amenity = storage.all("Amenity")
+        self.assertIn(amenity, my_amenity.values())
+        my_user = storage.all("User")
+        self.assertIn(user, my_user.values())
+        all = storage.all()
+        self.assertIn(state, all.values())
+        self.assertIn(amenity, all.values())
+        self.assertIn(user, all.values())
+
+
+@unittest.skipIf(os.getenv("HBNB_TYPE_STORAGE") != 'db', "Testing db storage")
+class test_DBStorage_Tables(unittest.TestCase):
+    """ Test that the links between tables were created properly """
+
+    def test_table_links(self):
+        """ Test that the necessary table links and delete relationships
+            have been set up
+        """
+        # Create States
+        state = State(name="California")
+        state.save()
+        state_2 = State(name="New York")
+        state_2.save()
+        # Create Cities
+        city = City(state_id=state.id, name="San Francisco")
+        city.save()
+        city_2 = City(state_id=state.id, name="Cali City")
+        city_2.save()
+        city_3 = City(state_id=state_2.id, name="New York")
+        city_3.save()
+        # Create Users
+        user = User(email="jj@mm.com", password="jjpwd")
+        user.save()
+        user_2 = User(email="mm@jj.com", password="mmpwd")
+        user_2.save()
+        # Create Places
+        place = Place(user_id=user.id, city_id=city.id, name="House 1")
+        place.save()
+        place_2 = Place(user_id=user_2.id, city_id=city_2.id, name="House 2")
+        place_2.save()
+        place_3 = Place(user_id=user_2.id, city_id=city_3.id, name="House 3")
+        place_3.save()
+        # Create Amenity
+        amenity = Amenity(name="Wifi")
+        amenity.save()
+        amenity_2 = Amenity(name="Cable")
+        amenity_2.save()
+        amenity_3 = Amenity(name="Oven")
+        amenity_3.save()
+        # link place_1 with 2 amenities
+        place.amenities.append(amenity)
+        place.amenities.append(amenity_2)
+        # link place_2 with 3 amenities
+        place_2.amenities.append(amenity)
+        place_2.amenities.append(amenity_2)
+        place_2.amenities.append(amenity_3)
+        # link place_3 with 1 amenity
+        place_3.amenities.append(amenity)
+        # Create Reviews
+        review = Review(text="Nice view from the front balcony",
+                        place_id=place.id, user_id=user.id)
+        review.save()
+        review_2 = Review(text="Nothing nice to say",
+                          place_id=place_2.id, user_id=user.id)
+        review_2.save()
+        review_3 = Review(text="This place sucks",
+                        place_id=place_3.id, user_id=user_2.id)
+        review_3.save()
+
+        # Deleting a State should delete all linked Cities and places and review
+        state_2_key = "State." + state_2.id
+        city_3_key = "City." + city_3.id
+        place_3_key = "Place." + place_3.id
+        review_3_key = "Review." + review_3.id
+        state_2.delete()
+        storage.save()
+        all = storage.all().keys()
+        self.assertNotIn(state_2_key, all)
+        self.assertNotIn(city_3_key, all)
+        self.assertNotIn(place_3_key, all)
+        self.assertNotIn(review_3_key, all)
+
+        # Deleting a place should leave the amenities present
+        amenity_key = "Amenity." + amenity.id
+        self.assertIn(amenity_key, all)
+
+        # Deleting a user should delete all linked reviews
+        user_2_key = "User." + user_2.id
+        user_2.delete()
+        storage.save()
+        all = storage.all().keys()
+        self.assertNotIn(user_2_key, all)
+
+        # Deleting a City should delete all linked Places and Reviews
+        city_2_key = "City." + city_2.id
+        place_2_key = "Place." + place_2.id
+        review_2_key = "Review." + review_2.id
+        city_2.delete()
+        storage.save()
+        all = storage.all().keys()
+        self.assertNotIn(city_2_key, all)
+        self.assertNotIn(place_2_key, all)
+        self.assertNotIn(review_2_key, all)
